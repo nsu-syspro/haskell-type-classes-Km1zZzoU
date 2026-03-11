@@ -3,9 +3,10 @@
 
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
-module Task2 where
+module Task2 (Expr(..), IntOp(..), Parse(..), Eval(..), evalExpr, evaluateInteger) where
 
 import Task1 (Parse, Parse(..))
+import Data.Char (isAsciiLower)
 
 -- * Expression data type
 
@@ -22,6 +23,13 @@ data Expr a op =
 -- | Integer binary operations
 data IntOp = Add | Mul | Sub
   deriving Show
+
+instance Parse IntOp where
+    parse "+" = Just Add
+    parse "*" = Just Mul
+    parse "-" = Just Sub
+    parse _ = Nothing
+
 
 -- * Parsing
 
@@ -42,7 +50,21 @@ data IntOp = Add | Mul | Sub
 -- Nothing
 --
 instance (Parse a, Parse op) => Parse (Expr a op) where
-  parse = error "TODO: define parse (Parse (Expr a op))"
+    parse s = case words s of
+        [] -> Nothing
+        ws -> case parseRPN ws [] of
+            Just [expr] -> Just expr
+            _ -> Nothing
+      where
+        parseRPN [] stack = Just stack
+        parseRPN (x:xs) stack
+            | Just op <- parse x = case stack of
+                (b:a:rest) -> parseRPN xs (BinOp op a b : rest)
+                _ -> Nothing
+            | Just lit <- parse x = parseRPN xs (Lit lit : stack)
+            | all isAsciiLower x =
+                parseRPN xs (Var x : stack)
+            | otherwise = Nothing
 
 -- * Evaluation
 
@@ -50,6 +72,12 @@ instance (Parse a, Parse op) => Parse (Expr a op) where
 class Eval a op where
   -- | Evaluates given binary operation with provided arguments
   evalBinOp :: op -> a -> a -> a
+
+instance Eval Integer IntOp where
+    evalBinOp Add = (+)
+    evalBinOp Mul = (*)
+    evalBinOp Sub = (-)
+
 
 -- | Evaluates given 'Expr' using given association list of variable values
 --
@@ -65,7 +93,12 @@ class Eval a op where
 -- Nothing
 --
 evalExpr :: (Eval a op) => [(String, a)] -> Expr a op -> Maybe a
-evalExpr = error "TODO: define evalExpr"
+evalExpr _ (Lit x) = Just x
+evalExpr vars (Var name) = lookup name vars
+evalExpr vars (BinOp op left right) = do
+    l <- evalExpr vars left
+    r <- evalExpr vars right
+    Just (evalBinOp op l r)
 
 -- | Parses given integer expression in Reverse Polish Notation and evaluates it
 -- using given association list of variable values
@@ -88,8 +121,9 @@ evalExpr = error "TODO: define evalExpr"
 -- >>> evaluateInteger [] "2 3"
 -- Nothing
 --
+
 evaluateInteger :: [(String, Integer)] -> String -> Maybe Integer
-evaluateInteger = error "TODO: define evaluateInteger"
+evaluateInteger = evaluate @_ @IntOp
 
 -- | Parses given expression in Reverse Polish Notation and evaluates it
 -- using given association list of variable values
