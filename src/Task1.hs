@@ -12,7 +12,7 @@ data IExpr =
     Lit Integer
   | Add IExpr IExpr
   | Mul IExpr IExpr
-  deriving Show
+  deriving (Show, Eq)
 
 -- * Evaluation
 
@@ -28,7 +28,9 @@ data IExpr =
 -- 9
 --
 evalIExpr :: IExpr -> Integer
-evalIExpr = error "TODO: define evalIExpr"
+evalIExpr (Lit n)       = n
+evalIExpr (Add e1 e2)   = evalIExpr e1 + evalIExpr e2
+evalIExpr (Mul e1 e2)   = evalIExpr e1 * evalIExpr e2
 
 -- * Parsing
 
@@ -55,7 +57,31 @@ class Parse a where
 -- Nothing
 --
 instance Parse IExpr where
-  parse = error "TODO: define parse (Parse IExpr)"
+    parse s = case parseRPN (words s) [] of
+        Just [expr] -> Just expr
+        _           -> Nothing
+      where
+        parseRPN :: [String] -> [IExpr] -> Maybe [IExpr]
+        parseRPN []     stack = Just stack
+        parseRPN (x:xs) stack = case x of
+            "+" -> applyBinop Add stack >>= \newStack -> parseRPN xs newStack
+            "*" -> applyBinop Mul stack >>= \newStack -> parseRPN xs newStack
+            _   -> case reads x of
+                [(n, "")] -> parseRPN xs (Lit n : stack)
+                _         -> Nothing
+
+        applyBinop :: (IExpr -> IExpr -> IExpr) -> [IExpr] -> Maybe [IExpr]
+        applyBinop op (e2:e1:rest) = Just (op e1 e2 : rest)
+        applyBinop _  _            = Nothing
+
+instance Parse Integer where
+    parse s = case reads s of
+        [(n, "")] -> Just n
+        _ -> Nothing
+
+instance Parse Bool where
+    parse _ = Nothing
+
 
 -- * Evaluation with parsing
 
@@ -77,4 +103,4 @@ instance Parse IExpr where
 -- Nothing
 --
 evaluateIExpr :: String -> Maybe Integer
-evaluateIExpr = error "TODO: define evaluateIExpr"
+evaluateIExpr s = fmap evalIExpr(parse s)
